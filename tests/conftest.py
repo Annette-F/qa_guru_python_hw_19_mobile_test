@@ -1,9 +1,12 @@
+import allure
 import pytest
+import allure_commons
 from appium.options.android import UiAutomator2Options
-from selene import browser
+from selene import browser, support
 import os
 from dotenv import load_dotenv
 from appium import webdriver
+from utils import attach
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -19,7 +22,7 @@ def mobile_management():
         'platformVersion': '9.0',
         'deviceName': 'Google Pixel 3',
 
-        'app': 'bs://sample.app',
+        'app': os.getenv('APP_URL'),
 
         'bstack:options': {
             'projectName': 'First Python project',
@@ -31,11 +34,21 @@ def mobile_management():
         }
     })
 
-    browser.config.driver_remote_url = 'http://hub.browserstack.com/wd/hub'
-    browser.config.driver_options = options
+    with allure.step('Init app session'):
+        browser.config.driver = webdriver.Remote('http://hub.browserstack.com/wd/hub', options=options)
 
     browser.config.timeout = float(os.getenv('timeout', '10.0'))
 
+    browser.config._wait_decorator = support._logging.wait_with(context=allure_commons._allure.StepContext)
+
     yield
 
-    browser.quit()
+    attach.add_bstack_screenshot(browser)
+    attach.add_bstack_xml_dump(browser)
+
+    session_id = browser.driver.session_id
+
+    with allure.step('Tear down app session'):
+        browser.quit()
+
+    attach.add_bstack_video(session_id)
